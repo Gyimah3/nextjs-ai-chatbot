@@ -8,7 +8,7 @@ import {
 import { z } from 'zod';
 
 import { get } from "@vercel/blob";
-import { PDFLoader } from "langchain/document_loaders/fs/pdf";
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 
 import { customModel } from '@/ai';
 import { models } from '@/ai/models';
