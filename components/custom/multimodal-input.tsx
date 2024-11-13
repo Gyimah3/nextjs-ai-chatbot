@@ -24,14 +24,14 @@ import { Textarea } from '../ui/textarea';
 
 const suggestedActions = [
   {
-    title: 'What is the weather',
-    label: 'in San Francisco?',
-    action: 'What is the weather in San Francisco?',
+    title: 'What are the ways',
+    label: 'that I can draft a good Energy proposal?',
+    action: 'What are the ways that I can draft a good Energy proposal?',
   },
   {
     title: 'Help me draft an essay',
-    label: 'about Silicon Valley',
-    action: 'Help me draft a short essay about Silicon Valley',
+    label: 'about Good Energy Policy',
+    action: 'Help me draft a short essay about Good Energy Policy',
   },
 ];
 

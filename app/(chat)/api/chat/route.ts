@@ -7,9 +7,6 @@ import {
 } from 'ai';
 import { z } from 'zod';
 
-import { get } from "@vercel/blob";
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-
 import { customModel } from '@/ai';
 import { models } from '@/ai/models';
 import { blocksPrompt, regularPrompt, systemPrompt } from '@/ai/prompts';
@@ -40,7 +37,7 @@ type AllowedTools =
   | 'requestSuggestions'
   | 'getWeather';
 
-const blocksTools: AllowedTools[] = [
+const blocksTools: AllowedTools[] = [  
   'createDocument',
   'updateDocument',
   'requestSuggestions',
@@ -50,48 +47,13 @@ const weatherTools: AllowedTools[] = ['getWeather'];
 
 const allTools: AllowedTools[] = [...blocksTools, ...weatherTools];
 
-
-// Helper function to extract text from PDF
-async function extractPDFContent(url: string): Promise<string> {
-  try {
-    const blob = await get(url);
-    if (!blob) return '';
-
-    const response = await fetch(blob.url);
-    const arrayBuffer = await response.arrayBuffer();
-    
-    const loader = new PDFLoader(new Blob([arrayBuffer]));
-    const docs = await loader.load();
-    
-    return docs.map(doc => doc.pageContent).join('\n\n');
-  } catch (error) {
-    console.error('Error extracting PDF content:', error);
-    return '';
-  }
-}
-
-// Enhanced system prompt for PDF handling
-const enhancedSystemPrompt = `
-${systemPrompt}
-When analyzing PDFs:
-- Provide relevant information from the document context
-- Answer questions specifically based on the document content
-- Indicate if information isn't found in the document
-- Maintain context across multiple messages about the same document
-`;
-
 export async function POST(request: Request) {
   const {
     id,
     messages,
     modelId,
-    experimental_attachments,
-  }: {
-    id: string;
-    messages: Array<Message>;
-    modelId: string;
-    experimental_attachments?: Array<Attachment>;
-  } = await request.json();
+  }: { id: string; messages: Array<Message>; modelId: string } =
+    await request.json();
 
   const session = await auth();
 
@@ -105,46 +67,11 @@ export async function POST(request: Request) {
     return new Response('Model not found', { status: 404 });
   }
 
-  const streamingData = new StreamData();
-
-  // Process PDF attachments if present
-  let documentContext = '';
-  if (experimental_attachments?.length) {
-    try {
-      const pdfAttachments = experimental_attachments.filter(
-        att => att.contentType === 'application/pdf'
-      );
-
-      for (const attachment of pdfAttachments) {
-        const pdfContent = await extractPDFContent(attachment.url);
-        if (pdfContent) {
-          documentContext += `Content from ${attachment.name}:\n${pdfContent}\n\n`;
-        }
-      }
-
-      if (documentContext) {
-        streamingData.append({
-          type: 'status',
-          content: 'Processing PDF content...',
-        });
-      }
-    } catch (error) {
-      console.error('Error processing PDFs:', error);
-      return new Response('Error processing PDF files', { status: 500 });
-    }
-  }
-
-  // Modify messages to include PDF content
   const coreMessages = convertToCoreMessages(messages);
   const userMessage = getMostRecentUserMessage(coreMessages);
 
   if (!userMessage) {
     return new Response('No user message found', { status: 400 });
-  }
-
-  // Add document context to user message if present
-  if (documentContext) {
-    userMessage.content = `Document Context:\n${documentContext}\n\nUser Question: ${userMessage.content}`;
   }
 
   const chat = await getChatById({ id });
@@ -160,9 +87,11 @@ export async function POST(request: Request) {
     ],
   });
 
+  const streamingData = new StreamData();
+
   const result = await streamText({
     model: customModel(model.apiIdentifier),
-    system: documentContext ? enhancedSystemPrompt : systemPrompt,
+    system: systemPrompt,
     messages: coreMessages,
     maxSteps: 5,
     experimental_activeTools: allTools,
@@ -396,17 +325,6 @@ export async function POST(request: Request) {
           };
         },
       },
-      processPDF: {
-        description: 'Process and analyze PDF content',
-        parameters: z.object({
-          query: z.string().describe('The specific query about the PDF content'),
-        }),
-        execute: async ({ query }) => {
-          return {
-            response: `Analyzing document content for: ${query}`,
-          };
-        },
-      },
     },
     onFinish: async ({ responseMessages }) => {
       if (session.user && session.user.id) {
@@ -436,7 +354,7 @@ export async function POST(request: Request) {
             ),
           });
         } catch (error) {
-          console.error('Failed to save chat:', error);
+          console.error('Failed to save chat');
         }
       }
 
